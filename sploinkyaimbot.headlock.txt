@@ -1,0 +1,121 @@
+--[[ Head - HumanoidRootPart ]]local target = "Head"  
+--[[ Keyboard Key to Aimlock ]]local bind = Enum.KeyCode.E 
+--[[ ANTI - ANTI LOCK        ]]local resolver = true  
+--[[ Team Based Games        ]]local teamcheck = false 
+--[[ Predict Movement        ]]local predictor = true  
+
+--[[ Dont Edit Unless Smart ]]--
+
+local held = false
+
+local players = game.Players
+local Camera = game:GetService("Workspace").CurrentCamera
+local player = game.Players.LocalPlayer
+local Mouse = player:GetMouse()
+
+local function IsVisible(pos, ignoreList)
+	return #Camera:GetPartsObscuringTarget({Camera.CFrame.p, pos}, ignoreList) == 0 and true or false
+end
+
+local function getclosestvisible()
+    local Closest, DistanceToMouse
+    for i,v in pairs(players:GetChildren()) do
+        if v == player or (teamcheck and v.Team == player.Team) then continue end
+        
+        local char = v.Character
+        if not char then continue end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        local head= char:FindFirstChild("Head")
+        if not hrp or not head or not hum or hum.Health <= 0 then continue end
+        
+        local Pos, OnScreen = Camera:WorldToScreenPoint(hrp.Position)
+		if not OnScreen then continue end
+		if not (IsVisible(head.Position,{Camera,player.Character,char}) or IsVisible(hrp.Position,{Camera,player.Character,char})) then continue end
+	    
+		local Distance = (Vector2.new(Pos.X, Pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+		if Distance <= (DistanceToMouse or 2000) then
+			DistanceToMouse = Distance
+			Closest = char
+		end
+    end
+    return Closest,DistanceToMouse;
+end
+
+local function getclosest()
+    local Closest, DistanceToMouse
+    local Visible, VisibleDistance = getclosestvisible()
+    for i,v in pairs(players:GetChildren()) do
+        if v == player or (teamcheck and v.Team == player.Team) then continue end
+        
+        local char = v.Character
+        if not char then continue end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        local head= char:FindFirstChild("Head")
+        if not hrp or not head or not hum or hum.Health <= 0 then continue end
+        
+        local Pos, OnScreen = Camera:WorldToScreenPoint(hrp.Position)
+		if not OnScreen then continue end
+    			
+    	local Distance = (Vector2.new(Pos.X, Pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+		if Distance <= (DistanceToMouse or 2000) then
+		    if Visible and (VisibleDistance < Distance or math.abs(VisibleDistance-Distance) < Camera.FieldOfView) then
+        		DistanceToMouse = VisibleDistance
+        		Closest = Visible
+        	else
+        	    DistanceToMouse = Distance
+			    Closest = char
+            end
+        end
+    end
+    return Closest;
+end
+
+game:GetService("UserInputService").InputBegan:Connect(function(key,ischatting)
+    if (key.KeyCode == bind or key.UserInputType == bind) and not game:GetService('UserInputService'):GetFocusedTextBox() then
+        held = true
+    end
+end)
+game:GetService("UserInputService").InputEnded:Connect(function(key,ischatting)
+    if (key.KeyCode == bind or key.UserInputType == bind) and not game:GetService('UserInputService'):GetFocusedTextBox() then
+        held = false
+    end
+end)
+
+local lastvel = Vector3.new(0,0,0)
+local prevel = Vector3.new(0,0,0)
+game:GetService("RunService").RenderStepped:Connect(function()  
+    if held then 
+    
+        local char = getclosest();
+        if char then 
+    
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChild("Humanoid")
+            local hit = char:FindFirstChild(target)
+            if hrp and hum and hit and hum.Health > 0 then
+    
+                local Target = (hum:GetState() == Enum.HumanoidStateType.Freefall and (char:FindFirstChild("LeftFoot") or char:FindFirstChild("Left Leg"))) or hit
+                local Aiming = (Target.CFrame + (Target.Velocity * ((math.abs(Target.Velocity.Magnitude - lastvel.Magnitude)+math.abs(player.Character.Head.Velocity.Magnitude - prevel.Magnitude))/(player:GetNetworkPing()*2000) + 0.128 + ((player.Character.Head.Position-Target.Position).Magnitude/5000)))).p
+
+                if resolver and (Target.Velocity.Y < -30 and hum.FloorMaterial ~= "Air" and not hum.PlatformStand) or predictor == false then
+                    Aiming = Target.CFrame.p
+                end
+    
+                local Screen, onScreen = Camera:WorldToScreenPoint(Aiming)
+                if onScreen then
+                    local PositionX = (Mouse.X-Screen.X)/(15)
+            		local PositionY = (Mouse.Y-Screen.Y)/(15)
+            	    mousemoverel(-PositionX, -PositionY)
+            	    
+            	    --[[ Saving Movement ]]--
+            	    lastvel = Target.Velocity
+            	    prevel = player.Character.Head.Velocity
+                end
+            end
+        end
+    end
+end)
